@@ -1,0 +1,20 @@
+{
+  "demoDate": "2025-02-14",
+  "sleep": {
+    "2025-02-14": { "sleepSeconds": 26640 },
+    "2025-02-13": { "sleepSeconds": 25200 }
+  },
+  "heartRate": {
+    "2025-02-13": { "restingBpm": 56, "minBpm": 49, "maxBpm": 141 },
+    "2025-02-12": { "restingBpm": 59, "minBpm": null, "maxBpm": null }
+  },
+  "movement": {
+    "2025-02-13": { "steps": 8240, "distanceMetres": 5910 },
+    "2025-02-12": { "steps": 0, "distanceMetres": 0 }
+  },
+  "activities": [
+    { "date": "2025-02-13", "type": "Run", "durationSeconds": 1860, "distanceMetres": 5000 },
+    { "date": "2025-02-12", "type": "Strength training", "durationSeconds": 2400, "distanceMetres": "unsupported" },
+    { "date": "2025-02-11", "type": "Walk", "durationSeconds": 1620, "distanceMetres": 2100 }
+  ]
+}

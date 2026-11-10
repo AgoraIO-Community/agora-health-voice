@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agora Health Voice</title>
+  <style>
+    :root { color-scheme: light; background: #f8f6ee; color: #18362f; font: 1rem/1.55 system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; }
+    main { max-width: 51rem; margin: auto; padding: clamp(2rem, 8vw, 6rem) clamp(1.2rem, 5vw, 3rem); }
+    h1 { font: 500 clamp(2.75rem, 8vw, 5.25rem)/1.02 Georgia, serif; letter-spacing: -.035em; margin: 0; text-wrap: balance; }
+    h2 { font: 500 1.6rem/1.2 Georgia, serif; margin: 0 0 .65rem; }
+    p { margin: 0; }
+    .intro { margin: 1rem 0 1.65rem; max-width: 42ch; font-size: 1.1rem; }
+    .source { display: inline-block; background: #e1ece2; padding: .3rem .65rem; border-radius: .25rem; font-size: .9rem; font-weight: 650; }
+    .session { margin-top: 1.5rem; padding: 1.25rem 0; border-block: 1px solid #a6b5a5; }
+    .state { display: flex; align-items: baseline; gap: .6rem; }
+    .dot { width: .55rem; height: .55rem; flex: none; border: 1px solid currentColor; border-radius: 50%; }
+    .session[data-state="live"] .dot { background: #237750; }
+    .session[data-state="error"] #status { color: #90362b; }
+    .buttons { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: .85rem; }
+    button { font: inherit; font-weight: 650; color: inherit; background: transparent; border: 1px solid #537667; border-radius: .3rem; min-height: 2.85rem; padding: .45rem 1rem; cursor: pointer; }
+    button:hover:enabled { background: #e1ece2; }
+    #start { color: #fffdf6; background: #205743; border-color: #205743; }
+    #start:hover:enabled { background: #173d30; }
+    button:disabled { opacity: .52; cursor: default; }
+    button:focus-visible { outline: 2px solid #205743; outline-offset: 4px; }
+    .examples { margin-top: 2rem; }
+    ul { margin: 0; padding-inline-start: 1.25rem; }
+    li { padding-block: .25rem; }
+    ::selection { background: #cbe2d1; color: #18362f; }
+  </style>
+  <script type="module" src="/browser.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Agora Health Voice</h1>
+    <p class="intro">Ask about sleep, heart rate, steps, or recent activities. The assistant answers out loud.</p>
+    <p class="source" id="source">Checking data source</p>
+
+    <section class="session" id="session" aria-label="Voice session">
+      <div class="state"><span class="dot" aria-hidden="true"></span><p id="status" role="status">Checking voice setup…</p></div>
+      <div class="buttons">
+        <button id="start" type="button" disabled>Start</button>
+        <button id="stop" type="button" disabled>Stop</button>
+        <button id="playback" type="button" hidden>Enable audio</button>
+      </div>
+    </section>
+
+    <section class="examples" aria-labelledby="examples">
+      <h2 id="examples">Try asking</h2>
+      <ul>
+        <li>How did I sleep last night?</li>
+        <li>What was my resting heart rate yesterday?</li>
+        <li>How many steps did I take yesterday, and how far did I go?</li>
+        <li>What were my last three activities?</li>
+      </ul>
+    </section>
+    <noscript>Enable JavaScript to start a voice session.</noscript>
+  </main>
+</body>
+</html>

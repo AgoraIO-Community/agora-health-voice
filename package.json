@@ -1,0 +1,24 @@
+{
+  "name": "agora-health-voice",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc && esbuild src/browser/main.ts --bundle --minify --format=esm --target=es2022 --outfile=dist/browser.js",
+    "check": "tsc --noEmit",
+    "start": "npm run build && node --env-file-if-exists=.env dist/server.js",
+    "test": "npm run build && node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "agora-rtc-sdk-ng": "4.24.8",
+    "agora-token": "2.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "esbuild": "0.28.1",
+    "typescript": "5.9.3"
+  }
+}
