@@ -6,20 +6,39 @@ rules plus a provider credential/password assignment rule in `.gitleaks.toml`.
 Only code references and two exact existing test placeholders are allowlisted;
 no source directories, real findings, or baseline reports are excluded.
 
-## Local audit — 10 November 2026
+## Refreshed local audit — 10 November 2026
 
-- Audited the complete non-shallow local history: one commit,
-  `94751d03451b822e298d19e105243e381de72bde`, including its tree and commit message.
-- Audited all 17 tracked working files; no real secrets detected.
-- Inspected refs/reflogs and checked for unreachable objects: none outside that history.
-- Compared three sensitive values from the ignored local `.env` against historical
-  contents in memory, without displaying them: no matches.
-- Matches reviewed as non-secrets: `src/agora.ts:261` is a configuration reference;
-  `tests/recipe.test.mjs:63-64` contains explicit dummy test values.
-- `.env`, `node_modules/`, and `dist/` were already ignored and untracked.
-  Common local credentials, private keys, caches, logs, coverage, and generated
-  output are now ignored too. `.env.example` remains trackable and was scanned.
-- No credentials changed, history rewritten, application code modified, or push made.
+- Gitleaks **8.30.1** passed the complete non-shallow local history scan: three
+  commits reachable from refs/reflogs, including each tree and commit message.
+  The current tip is `9f89fdf`. `git fsck --full --no-reflogs --unreachable`
+  reported no unreachable objects.
+- The existing `secret_guard.py staged` check passed the current index. A separate
+  working-file snapshot, scanned through the same guard and configuration, passed
+  for all **27 tracked/unignored files**, including modified documentation and the
+  untracked draft `LICENSE` and license review document. The staged scan alone
+  does not include unstaged edits or untracked files.
+- `scripts/test_secret_guard.py` passed all **11 reported checks** in disposable
+  repositories. Intentional dummy findings were rejected as expected; none was
+  exposed. These tests do not commit to or push this project.
+- Confirmed `.env` is ignored and untracked. Common credential/key containers,
+  dependency directories, generated `dist/`, build/coverage output and logs are
+  ignored. `.env.example` remains tracked and was included in scanning.
+- Reviewed the health fixture as explicitly fictional. No personal health-data
+  file or session artifact is included in the tracked/unignored file inventory;
+  the owner's spoken-steps validation is documented without a personal count,
+  exact prompt or date. Secret-pattern scanning is not a general detector for
+  personal health data, so future publication contents still need human review.
+- Ignored local credentials, dependency contents and generated output are outside
+  the publication snapshot; they are not claimed to be secret-free. No ignored
+  `.env` values were printed or copied into the snapshot. The earlier baseline's
+  credential-equality check was not repeated in this review.
+- No application code, configuration, dependency or test source was modified.
+  Offline application tests regenerated ignored `dist/` output. No live service
+  calls, project commits, pushes or visibility changes were performed.
+
+This refresh supersedes the earlier one-commit/17-file audit scope. Any later
+change needs a new working-file check; run the installed staged guard after
+staging and before an authorized commit. Hooks are local, bypassable protections.
 
 ## Install after cloning
 
