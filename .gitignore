@@ -4,3 +4,30 @@ dist/
 .env.*
 !.env.example
 .DS_Store
+
+# Local credentials and private key material. Keep examples sanitized.
+.npmrc
+.netrc
+.aws/
+.ssh/
+credentials
+credentials.*
+*-credentials.json
+*-credentials.*.json
+service-account*.json
+service_account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+*.local
+
+# Generated output, caches, logs, and local audit reports.
+build/
+coverage/
+.cache/
+*.tsbuildinfo
+*.log
+gitleaks-report*
