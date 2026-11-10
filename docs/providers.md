@@ -1,24 +1,88 @@
 # Health data providers
 
-`HEALTH_DATA_PROVIDER=synthetic` is the default. It serves local fictional records. `HEALTH_DATA_PROVIDER=custom` exits at startup until you implement `createCustomProvider` in `src/providers/custom.ts`. That factory is the single extension point. The browser, Agora configuration, and tool schemas use the same contract for either mode.
+`HEALTH_DATA_PROVIDER=synthetic` is the default and serves the existing fictional
+fixtures. `HEALTH_DATA_PROVIDER=custom` creates the Garmin Personal API adapter.
+Provider failures never fall back to fictional values. The browser, Agora voice
+configuration, callback authentication, and four tool schemas are shared unchanged.
 
-## Custom adapter template
+## Garmin setup (server only)
 
-1. Read the authorized source's credentials from server environment variables and validate them when creating the adapter. Use bounded, server-side HTTPS requests and keep tokens and raw responses out of logs.
-2. Return a `HealthDataProvider` with `sleep(date)`, `heartRate(date)`, `movement(date)`, and `recentActivities(limit)`. Each daily lookup receives an exact `YYYY-MM-DD` date. Configure `HEALTH_TIME_ZONE` for the source's calendar. For overnight sleep, the tool asks for the current local date when it hears “last night.” Map this convention to the source's date model and preserve the normalized record date. Return missing when no matching record exists.
-3. Normalize durations to seconds, distances to metres, and heart rates to bpm. Map absent data to `missing`, fields the source cannot supply to `unsupported`, and numeric zero to an available value. Throw on timeouts, authorization failures, or invalid upstream responses. The tool reports those as `unavailable`.
-4. Return recent activities newest first and honor the requested limit. Use generic activity types such as “Run” or “Walk.” Exclude account IDs, route traces, free-text activity titles, raw samples, and other fields outside the contract.
-5. Before enabling a source with real data, verify the account owner's authorization and the source's terms for sharing values with the conversational stack. The callback returns normalized measurements to Agora for model processing. The resulting spoken answer goes to Murf for synthesis.
+- Keep the existing key in `~/.config/garmin/connect-personal-api-key`. The adapter
+  requires a regular file owned by the running user, without group/world access
+  (normally mode `0600` or `0400`), and refuses symlinks. It never modifies the file.
+- An explicitly set `GARMIN_PERSONAL_API_KEY` overrides the file. Leave it **unset**
+  to use the file; an empty variable is a configuration error. Do not put keys in
+  browser code, command-line arguments, source files, logs, or committed files.
+- Select `HEALTH_DATA_PROVIDER=custom` and `HEALTH_TIME_ZONE=Asia/Kolkata` in the
+  ignored local `.env` when ready to use real data. The calendar default is also
+  Asia/Kolkata. Keep `synthetic` selected until live testing is authorized.
+- No Garmin username/password, refresh token, OAuth client secret, database,
+  Supabase session, or Arova owner UUID is required for this single-owner adapter.
 
-## Garmin Personal API mapping example
+Construction loads and validates the credential locally but makes no network
+requests. The first provider operation exchanges it at the fixed Garmin Personal
+API token endpoint using `Authorization: ApiKey ...`. Tokens stay in memory,
+shared across concurrent operations. Renewal occurs one minute before JWT expiry,
+with a maximum cached lifetime of 24 hours. One data-request 401 permits one token
+renewal and retry; other HTTP failures are not automatically retried. Restart the
+process after replacing a key. Key validity cannot be established offline.
 
-For a personal, self-hosted extension, create a key in Garmin Connect Web and keep it in a server-only variable such as `GARMIN_PERSONAL_API_KEY`. Exchange the key with `Authorization: ApiKey …` at Garmin's token endpoint and use the returned bearer for authorized reads. Cache the bearer in memory until near expiry. Obtain a new bearer by exchanging the key again. [Garmin Personal API setup and authentication](https://developer.garmin.com/gc-developer-program/personal/personal-faq/)
+Each Garmin operation has a fourteen-second total deadline, including token waiting,
+response bodies and activity pages. Token issuance has a ten-second deadline; each
+data request retains a four-second deadline. The Agora tool timeout remains five
+seconds, so cold authentication can exceed the callback window even though a direct
+provider call succeeds. Data responses are limited to 512 KiB and token
+responses to 16 KiB; redirects are rejected. Rate limits, invalid credentials,
+timeouts and malformed responses throw sanitized errors, which the callback maps
+to `unavailable`. No upstream bodies, tokens or measurement values are logged.
 
-| Contract method | Documented Personal API mapping |
+## Mapping and missing data
+
+| Contract | Garmin read and normalized result |
 |---|---|
-| `sleep(date)` | Daily sleep. Use the recorded calendar date and measured sleep seconds. |
-| `heartRate(date)` | Daily heart rate. Select resting, minimum, and maximum values when present. |
-| `movement(date)` | Daily steps for a one-day range. Map the step count and step distance in metres. |
-| `recentActivities(limit)` | Activity search summaries. Select only local date, type, duration, and distance. |
+| `movement(date)` | `/usersummary-service/v2/dailysummaries` for one exact date; `movement.steps.value` and `distanceInMeters` |
+| `sleep(date)` | `/sleep-service/sleep/dailySleep`; `sleepTimeSeconds` in seconds |
+| `heartRate(date)` | `/wellness-service/wellness/dailyHeartRate`; `restingHeartRate`, `minHeartRate`, `maxHeartRate` in bpm |
+| `recentActivities(limit)` | `/activitylist-service/activities/search/activities`; generic type, `duration` in seconds and `distance` in metres |
 
-See [Garmin's reference endpoint list](https://github.com/garmin/connect-personal-api-python#supported-endpoints) for current paths and [Personal API Swagger documentation](https://developer.garmin.com/gc-developer-program/personal/swagger-docs/) for response schemas. Review the terms accepted at key creation before using real data. For other authorized sources, follow the same mapping, keeping source-specific credential exchange and field conversion within the custom adapter.
+Dates stay exact `YYYY-MM-DD` values. “Last night” resolves to the current local
+date, matching Garmin's overnight summary date; “yesterday” uses the previous
+calendar date. Garmin activity `startTimeLocal` supplies the recorded local date
+without a UTC shift. Activity pages are sorted newest first, with duplicate IDs
+and inconsistent page ordering rejected. At most three two-record pages are read
+for the existing maximum of five activities; an unavailable later page fails the
+operation rather than returning an incomplete answer.
+
+Partial valid measurements remain available independently; absent/null fields
+become `missing`, and numeric zero remains available where valid (heart rates must
+be positive). No daily measurements means a missing record. Null/204/404 and empty
+daily responses mean missing data; malformed populated responses and mismatched
+dates are errors. Empty activity lists remain empty and the existing tool layer
+reports them as missing. No interpolation, sample-based inference, or synthetic
+fallback is performed. Account identifiers, free-text activity titles, routes and
+raw samples are excluded. Sleep stages/scores available upstream are deliberately
+not exposed: the unchanged `Sleep` interface and sleep tool support duration only.
+
+## Provider independence and validation
+
+`HealthDataProvider` in `src/providers/types.ts` remains the minimum adapter
+interface: `sleep(date)`, `heartRate(date)`, `movement(date)` and
+`recentActivities(limit)`. Future providers implement this same contract with
+source-specific credential exchange and mapping behind the factory. Normalize
+seconds/metres/bpm, preserve missing versus unsupported, and throw on operational
+failures. The synthetic implementation remains separate and unchanged.
+
+`npm test` builds and runs the existing voice/fictional-provider tests plus mocked
+Garmin tests. Garmin tests inject fake credentials, fetch responses and clocks;
+they never read the real key or contact Garmin. They cover protected credential
+files, token sharing/expiry/renewal, dates, partial and missing fields, pagination,
+invalid responses, request deadlines and sanitized failures.
+
+Live validation requires separate explicit authorization. Before that step,
+confirm the account owner's authorization and Garmin's applicable Personal API
+terms, including sending normalized measurements through the conversational stack
+(Agora/model processing and Murf speech). The Personal API is for individual use;
+commercial multi-user integrations require another Garmin integration route.
+
+References: [Garmin Personal API FAQ](https://developer.garmin.com/gc-developer-program/personal/personal-faq/)
+and [Garmin reference client](https://github.com/garmin/connect-personal-api-python).

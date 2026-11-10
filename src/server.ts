@@ -290,7 +290,7 @@ async function main() {
   const voiceMode = env.VOICE_MODE ?? "health";
   if (voiceMode !== "health" && voiceMode !== "basic" && voiceMode !== "single-tool") throw new Error("VOICE_MODE must be health, basic or single-tool.");
   const config = readAgoraConfig(env);
-  const timeZone = env.HEALTH_TIME_ZONE ?? "UTC";
+  const timeZone = env.HEALTH_TIME_ZONE ?? "Asia/Kolkata";
   localDate(timeZone); // Validate the time zone before opening ports.
   const localPort = port(env.LOCAL_PORT, 3000);
   const callbackPort = port(env.CALLBACK_PORT, 3001);

@@ -43,13 +43,13 @@ test("strict dates, invalid input, partial records and zeros stay distinct", asy
   assert.equal(localDate("Asia/Kolkata", new Date("2025-02-13T23:00:00Z")), "2025-02-14");
 });
 
-test("an unimplemented or unknown provider exits before binding ports", () => {
+test("invalid custom credentials or an unknown provider exit before binding ports", () => {
   for (const [provider, message] of [
-    ["custom", /custom health data provider is unimplemented/i],
+    ["custom", /Garmin API key configuration is invalid/],
     ["unknown", /must be synthetic or custom/],
   ]) {
     const child = spawnSync(process.execPath, ["dist/server.js"], {
-      env: { HEALTH_DATA_PROVIDER: provider }, encoding: "utf8", timeout: 3000,
+      env: { HEALTH_DATA_PROVIDER: provider, GARMIN_PERSONAL_API_KEY: "" }, encoding: "utf8", timeout: 3000,
     });
     assert.equal(child.status, 1);
     assert.match(child.stderr, message);
