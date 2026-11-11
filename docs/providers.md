@@ -107,8 +107,8 @@ health data; ASR, model and TTS vendors remain fixed by the current Agora gatewa
 - Select `HEALTH_DATA_PROVIDER=custom` and `HEALTH_TIME_ZONE=Asia/Kolkata` in the
   ignored local `.env` when ready to use real data. The calendar default is also
   Asia/Kolkata. Keep `synthetic` selected until live testing is authorized.
-- No Garmin username/password, refresh token, OAuth client secret, database,
-  Supabase session, or Arova owner UUID is required for this single-owner adapter.
+- No Garmin username/password, refresh token, OAuth client secret, or
+  application database session is required for this single-owner adapter.
 
 Construction loads and validates the credential locally but makes no network
 requests. The first provider operation exchanges it at the fixed Garmin Personal
@@ -131,7 +131,7 @@ to `unavailable`. No upstream bodies, tokens or measurement values are logged.
 
 | Contract | Garmin read and normalized result |
 |---|---|
-| `movement(date)` | `/usersummary-service/v2/dailysummaries` for one exact date; `movement.steps.value` and `distanceInMeters` |
+| `movement(date)` | `/usersummary-service/v2/dailysummaries` for one exact date; `movement.steps.value` and `movement.steps.distanceInMeters` |
 | `sleep(date)` | `/sleep-service/sleep/dailySleep`; `sleepTimeSeconds` in seconds |
 | `heartRate(date)` | `/wellness-service/wellness/dailyHeartRate`; `restingHeartRate`, `minHeartRate`, `maxHeartRate` in bpm |
 | `recentActivities(limit)` | `/activitylist-service/activities/search/activities`; generic type, `duration` in seconds and `distance` in metres |

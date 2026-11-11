@@ -6,39 +6,44 @@ rules plus a provider credential/password assignment rule in `.gitleaks.toml`.
 Only code references and two exact existing test placeholders are allowlisted;
 no source directories, real findings, or baseline reports are excluded.
 
-## Refreshed local audit — 10 November 2026
+## Final publication review — 11 November 2026
 
-- Gitleaks **8.30.1** passed the complete non-shallow local history scan: three
-  commits reachable from refs/reflogs, including each tree and commit message.
-  The current tip is `9f89fdf`. `git fsck --full --no-reflogs --unreachable`
-  reported no unreachable objects.
-- The existing `secret_guard.py staged` check passed the current index. A separate
-  working-file snapshot, scanned through the same guard and configuration, passed
-  for all **27 tracked/unignored files**, including modified documentation and the
-  untracked draft `LICENSE` and license review document. The staged scan alone
-  does not include unstaged edits or untracked files.
+- Verified in authenticated GitHub: `AgoraIO-Community/agora-health-voice` is
+  private, with one branch (`main`) and no tags. Remote `main`, local `main`,
+  `HEAD` and the local tracking ref match
+  `100104247f58adf98231b8401ec7550fe43a9200`. The working tree was clean before
+  this review; the final documentation edits remain unstaged and uncommitted.
+- Gitleaks **8.30.1** passed the complete non-shallow local history scan: all
+  **four commits** reachable from refs/reflogs, including every tree and commit
+  message. `git fsck --full --no-reflogs --unreachable` reported no unreachable
+  objects. GitHub's visible history also reports four commits.
+- `secret_guard.py staged` passed the existing index. A separate working-file
+  snapshot passed the same guard/configuration for all **27 tracked/unignored
+  files**, including the final documentation edits. The staged scan alone does
+  not cover unstaged edits or untracked files.
 - `scripts/test_secret_guard.py` passed all **11 reported checks** in disposable
-  repositories. Intentional dummy findings were rejected as expected; none was
-  exposed. These tests do not commit to or push this project.
-- Confirmed `.env` is ignored and untracked. Common credential/key containers,
-  dependency directories, generated `dist/`, build/coverage output and logs are
-  ignored. `.env.example` remains tracked and was included in scanning.
-- Reviewed the health fixture as explicitly fictional. No personal health-data
-  file or session artifact is included in the tracked/unignored file inventory;
-  the owner's spoken-steps validation is documented without a personal count,
-  exact prompt or date. Secret-pattern scanning is not a general detector for
-  personal health data, so future publication contents still need human review.
-- Ignored local credentials, dependency contents and generated output are outside
-  the publication snapshot; they are not claimed to be secret-free. No ignored
-  `.env` values were printed or copied into the snapshot. The earlier baseline's
-  credential-equality check was not repeated in this review.
-- No application code, configuration, dependency or test source was modified.
-  Offline application tests regenerated ignored `dist/` output. No live service
-  calls, project commits, pushes or visibility changes were performed.
+  repositories. No project commits or pushes were performed by those tests.
+- `npm run check` passed and `npm test` passed **32/32 tests**, with no failures,
+  skips or cancellations. Agora/Garmin requests were mocked; no live Agora or
+  Garmin tests were repeated. Tests regenerated only ignored `dist/` output.
+- Reviewed the current files and historical file inventory: no personal health
+  files, credential files, session recordings or private artifacts were found
+  in the publication content. The health fixture is fictional. The documented
+  owner-confirmed live result includes no personal count, exact prompt or date.
+  Pattern scanning cannot generally detect personal health data.
+- `.env` is ignored and untracked; dependencies, generated output, logs and common
+  credential containers are excluded. `.env.example` is tracked and scanned.
+  Ignored local credentials and generated files are outside the publication
+  snapshot and are not claimed to be secret-free. No credential values were
+  printed or copied. Publish reviewed Git contents, not a local-folder archive.
+- Only README/provider/license-status/audit documentation changed. The standard
+  MIT `LICENSE` already contains `Copyright (c) 2026 Agora, Inc.`. No application
+  code, configuration, dependency, test source, index, remote URL or history was
+  changed. No visibility change or Recipes submission was performed.
 
-This refresh supersedes the earlier one-commit/17-file audit scope. Any later
-change needs a new working-file check; run the installed staged guard after
-staging and before an authorized commit. Hooks are local, bypassable protections.
+This review supersedes the earlier three-commit audit. Any later changes need a
+new working-file scan; run the staged guard after staging and before an authorized
+commit. Hooks are local, bypassable protections and must be installed per clone.
 
 ## Install after cloning
 
@@ -89,8 +94,8 @@ content, LFS payloads, unusual encodings, unknown credential formats, archives
 beyond three nested levels, and encodings beyond five decoding levels need
 additional review. Submodules and tags pointing to non-commit objects are blocked
 for separate review; shallow history also blocks a full history/push scan.
-Ignored local files are not part of the Git audit (the `.env` equality check above
-does not validate those credentials). Ignore patterns do not untrack files already
+Ignored local files are not part of the Git audit; their credentials were not
+validated by this review. Ignore patterns do not untrack files already
 committed and can be overridden by `git add -f`.
 
 Local hooks can be bypassed with `--no-verify` or changed/disabled in local Git

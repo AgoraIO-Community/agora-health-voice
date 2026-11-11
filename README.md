@@ -30,7 +30,7 @@ Implementation map: [browser](src/browser/main.ts), [local server and callbacks]
 Use Node.js **24 or later**, npm, Git and a modern browser. Local setup was assessed on macOS; other platforms have not been validated here. Voice additionally requires microphone permission, internet access, an Agora project with RTC token authentication and Conversational AI Main v2 access, Murf access, and an HTTPS tunnel utility.
 
 ```sh
-git clone https://github.com/rangaj/agora-health-voice.git
+git clone https://github.com/AgoraIO-Community/agora-health-voice.git
 cd agora-health-voice
 npm ci
 cp .env.example .env
@@ -135,9 +135,9 @@ Synthetic operation needs no health credentials. Choosing Garmin exposes normali
 
 Garmin's cold authentication can exceed the tool's five-second timeout even when a direct provider operation succeeds. See [provider limits](docs/providers.md) before interpreting live availability.
 
-The repository remains private. MIT is the selected license, subject to Agora internal approval. The standard [LICENSE](LICENSE) is prepared with the proposed notice `Copyright (c) 2026 Agora, Inc.`; it is **pending confirmation of ownership and publication authorization**, not an established legal determination or an authorized public release. Read the [license review status](docs/license-proposal.md) before using or distributing the draft. Before submission:
+The project is licensed under the [MIT License](LICENSE), with the approved notice `Copyright (c) 2026 Agora, Inc.`. See the [license status](docs/license-proposal.md) for scope. The repository is owned by `AgoraIO-Community` and remains private; license approval does not authorize a visibility change or submission. Before submission:
 
-- Confirm Agora ownership, the proposed copyright notice and internal MIT/publication approval. Confirm public author/contributor credit separately from copyright ownership.
+- Confirm the public author/contributor credit separately from copyright ownership.
 - The [refreshed security audit](docs/git-secret-protection.md) passed the current working-file and complete local-history scans. Recheck any later changes before publication; hooks are local and must be installed in each clone.
 - Arrange at least one reviewed public material URL under separate publication authorization. The [Agora submission form](https://github.com/AgoraIO-Community/agora-recipes/blob/main/.github/ISSUE_TEMPLATE/submission.yml) needs a name, English introduction, author credit and public link; a video or hosted demo is optional. Maintainers prepare the catalog PR after issue review.
 
