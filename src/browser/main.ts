@@ -9,6 +9,12 @@ const playbackButton = document.querySelector<HTMLButtonElement>("#playback")!;
 const source = document.querySelector<HTMLElement>("#source")!;
 const status = document.querySelector<HTMLElement>("#status")!;
 const panel = document.querySelector<HTMLElement>("#session")!;
+const stateLabel = document.querySelector<HTMLElement>("#state-label")!;
+
+type SessionState = "idle" | "starting" | "live" | "stopping" | "error";
+const stateLabels: Record<SessionState, string> = {
+  idle: "Ready", starting: "Connecting", live: "Active", stopping: "Stopping", error: "Error",
+};
 
 interface Run {
   id: string;
@@ -20,6 +26,7 @@ interface Run {
   audio?: IRemoteAudioTrack;
   timer?: number;
   stopRequest?: Promise<void>;
+  startupFailure?: string;
 }
 
 let run: Run | undefined;
@@ -27,25 +34,90 @@ let retryStop: Run | undefined;
 let configured = false;
 AgoraRTC.setLogLevel(4);
 
-function render(state: string, message: string) {
+function render(state: SessionState, message: string) {
   panel.dataset.state = state;
+  stateLabel.textContent = stateLabels[state];
   status.textContent = message;
   startButton.disabled = !configured || !!run || !!retryStop;
   stopButton.disabled = state === "stopping" || (!retryStop && (!run || run.cancelled));
   if (state !== "live" && state !== "starting") playbackButton.hidden = true;
 }
 
-async function post<T>(path: string, id: string): Promise<T> {
-  const response = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id }),
-    keepalive: path === "/api/stop",
-    signal: AbortSignal.timeout(25_000),
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error ?? "The local server could not complete the request.");
+// Only fixed backend messages are eligible for display. Never relay arbitrary
+// response text: a proxy or SDK error can contain credentials or request data.
+const safeBackendErrors = new Set([
+  "Open the app on localhost.",
+  "Session controls require the approved browser origin.",
+  "Session controls require the local browser origin.",
+  "Mobile authentication required.",
+  "Send a JSON object.", "Send a valid JSON object.", "Request body is too large.",
+  "Route not found.", "Invalid session ID.", "The local server is closing.",
+  "Add the voice settings from .env.example and restart.",
+  "Another session is starting or active. Stop it or wait for it to expire.",
+  "The session was stopped during startup.",
+  "The local server could not complete the request.",
+  "The microphone can close now. Agora stop could not be confirmed. Try Stop again or wait for expiry.",
+]);
+class PostError extends Error {}
+
+function safeBackendError(result: Record<string, unknown>): string {
+  const message = result.error;
+  if (typeof message !== "string") return "";
+  if (safeBackendErrors.has(message)) return ` ${message}`;
+  // The server sanitizes Agora details; retain the actionable summary without
+  // forwarding dynamic text or structured upstream objects into the UI.
+  if (message.startsWith("Agora could not start the voice session")) {
+    return " Agora could not start the voice session. Check the server configuration and callback URL.";
+  }
+  return "";
+}
+
+async function post<T>(path: "/api/start" | "/api/stop", id: string): Promise<T> {
+  let response: Response;
+  const unavailable = `${path}; HTTP unavailable; content type unavailable; redirected unavailable`;
+  try {
+    response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+      keepalive: path === "/api/stop",
+      signal: AbortSignal.timeout(25_000),
+    });
+  } catch {
+    throw new PostError(`Network/request failure (${unavailable}). Check the connection and retry.`);
+  }
+  const mime = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+  const isJson = mime === "application/json" || mime === "application/problem+json";
+  const contentType = ["application/json", "application/problem+json", "text/html", "text/plain", "application/octet-stream"].includes(mime ?? "")
+    ? mime : mime ? "other" : "missing";
+  const details = `${path}; HTTP ${response.status}; content type ${contentType}; redirected ${response.redirected ? "yes" : "no"}`;
+  let text: string;
+  try { text = await response.text(); } catch {
+    throw new PostError(`Network/response read failure (${details}).`);
+  }
+  let result: unknown;
+  let issue = "";
+  if (!text.trim()) issue = "Empty JSON response";
+  else if (!isJson) issue = "Expected a JSON response";
+  else {
+    try { result = JSON.parse(text); } catch { issue = "Invalid JSON response"; }
+    if (!issue && (!result || typeof result !== "object" || Array.isArray(result))) issue = "Invalid JSON response object";
+  }
+  if (!response.ok) {
+    const backend = issue ? "" : safeBackendError(result as Record<string, unknown>);
+    throw new PostError(`HTTP error (${details}).${backend}${issue ? ` ${issue}.` : ""}`);
+  }
+  if (issue) throw new PostError(`${issue} (${details}).`);
   return result as T;
+}
+
+function startupMessage(stage: string, error: unknown): string {
+  if (error instanceof PostError) return `${stage} failed: ${error.message}`;
+  const names = new Set(["NotAllowedError", "NotFoundError", "NotReadableError", "NotSupportedError", "SyntaxError", "TypeError", "AbortError", "TimeoutError"]);
+  const name = error && typeof error === "object" && "name" in error && typeof error.name === "string" && names.has(error.name)
+    ? ` (${error.name})` : "";
+  const hint = stage === "Microphone access" ? "Check browser permissions and try again." : "Check browser audio support and your connection, then try again.";
+  return `${stage} failed${name}. ${hint}`;
 }
 
 function releaseAudio(current: Run) {
@@ -65,7 +137,7 @@ function stopAgent(current: Run): Promise<void> {
   return current.stopRequest;
 }
 
-async function end(current: Run, message = "Session ended. Start whenever you’re ready.", state = "idle") {
+async function end(current: Run, message = "Session ended. Start whenever you’re ready.", state: SessionState = "idle") {
   if (current.cancelled) return;
   current.cancelled = true;
   releaseAudio(current);
@@ -80,7 +152,8 @@ async function end(current: Run, message = "Session ended. Start whenever you’
   } catch (error) {
     if (run === current) run = undefined;
     retryStop = current;
-    render("error", error instanceof Error ? error.message : "Could not confirm the session ended. Try Stop again.");
+    const cleanup = error instanceof PostError ? error.message : "Could not confirm the session ended.";
+    render("error", `${current.startupFailure ? `${current.startupFailure} ` : ""}Cleanup failed: ${cleanup} Try Stop again.`);
   }
 }
 
@@ -89,11 +162,13 @@ async function start() {
   const current: Run = { id: crypto.randomUUID(), cancelled: false, requested: false, ready: false };
   run = current;
   render("starting", "Waiting for microphone permission…");
+  let stage = "Microphone access";
   try {
     const mic = await AgoraRTC.createMicrophoneAudioTrack({ AEC: true, ANS: true });
     if (current.cancelled) { mic.close(); return; }
     current.mic = mic;
     render("starting", "Connecting to Agora…");
+    stage = "Session start (/api/start)";
     current.requested = true;
     const rtc = await post<BrowserConnection & { expiresAt: number }>("/api/start", current.id);
     if (current.cancelled) {
@@ -105,6 +180,7 @@ async function start() {
     current.timer = window.setTimeout(() => {
       void end(current, "The three-minute session ended. Start again to continue.");
     }, Math.max(0, rtc.expiresAt - Date.now()));
+    stage = "RTC client creation";
     const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
     current.client = client;
 
@@ -130,19 +206,18 @@ async function start() {
       }
     });
 
+    stage = "RTC join";
     await client.join(rtc.appId, rtc.channel, rtc.token, rtc.uid);
     if (current.cancelled) return;
+    stage = "Microphone publication";
     await client.publish(mic);
     if (current.cancelled) return;
     current.ready = true;
     render("live", "Microphone on. Ask a question.");
   } catch (error) {
     if (!current.cancelled) {
-      const message = !current.requested
-        ? "Microphone access failed. Check browser permissions and try again."
-        : error instanceof Error && !current.client
-          ? error.message
-          : "Could not connect audio. Check your connection and try again.";
+      const message = startupMessage(stage, error);
+      current.startupFailure = message;
       await end(current, message, "error");
     }
   } finally {
@@ -159,8 +234,9 @@ stopButton.addEventListener("click", async () => {
       await stopAgent(pending);
       retryStop = undefined;
       render("idle", "Session ended. Start whenever you’re ready.");
-    } catch {
-      render("error", "Could not confirm the Agora stop. Try again or wait for expiry.");
+    } catch (error) {
+      const cleanup = error instanceof PostError ? error.message : "Could not confirm the Agora stop.";
+      render("error", `${pending.startupFailure ? `${pending.startupFailure} ` : ""}Cleanup retry failed: ${cleanup} Try again or wait for expiry.`);
     }
   } else if (run) {
     void end(run);
@@ -189,14 +265,16 @@ try {
   const response = await fetch("/api/info");
   if (!response.ok) throw new Error();
   const info = await response.json() as { synthetic: boolean; demoDate?: string; voiceConfigured: boolean; voiceMode: "health" | "basic" };
-  source.textContent = info.synthetic ? `Synthetic data · Demo date ${info.demoDate}` : "Custom data source";
+  source.dataset.provider = info.synthetic ? "synthetic" : "garmin";
+  source.textContent = info.synthetic
+    ? "Synthetic Data — demonstration mode"
+    : "Garmin — live reference integration";
   if (info.voiceMode === "basic") {
-    source.textContent = "Basic Voice · Conversation test";
-    document.querySelector<HTMLElement>(".intro")!.textContent = "Start a short conversation with the voice assistant.";
+    document.querySelector<HTMLElement>(".intro")!.textContent = "Basic voice mode · Start a short conversation with the voice assistant.";
     document.querySelector<HTMLElement>(".examples")!.hidden = true;
   }
   configured = info.voiceConfigured;
-  render("idle", configured ? "Ready to start a voice session." : "Voice setup needed. Add credentials and a callback URL in .env.");
+  render("idle", configured ? "Ready to start a voice session." : "Voice setup needed. Complete the server configuration to enable conversations.");
 } catch {
   source.textContent = "Data source unavailable";
   render("error", "Could not read local setup. Restart the server and reload.");

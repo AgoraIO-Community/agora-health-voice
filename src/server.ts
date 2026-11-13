@@ -12,6 +12,8 @@ import { loadSyntheticProvider } from "./providers/synthetic.js";
 import type { CalendarDate, HealthDataProvider } from "./providers/types.js";
 import { InvalidToolInput, isToolName, localDate, runTool } from "./tools.js";
 
+import { createBrowserAccess, readBrowserAccessConfig, type BrowserAccessConfig } from "./browser-access.js";
+
 class HttpError extends Error {
   constructor(readonly status: number, message: string, readonly agora?: {
     requestId?: string; timestamp: string; status?: number; validationDetails: unknown[];
@@ -69,6 +71,7 @@ interface Session extends VoiceSessionRequest {
 }
 
 interface Options {
+  browserAccess?: BrowserAccessConfig;
   provider: HealthDataProvider;
   demoDate?: CalendarDate;
   timeZone: string;
@@ -86,6 +89,7 @@ export function createHandlers(options: Options) {
   let shuttingDown = false;
   const { gateway } = options;
   const duration = options.durationMs ?? sessionDurationMs;
+  const browserAccess = createBrowserAccess(options.browserAccess);
   const hosts = new Set([`localhost:${options.localPort}`, `127.0.0.1:${options.localPort}`]);
 
   function stop(session: Session): Promise<void> {
@@ -137,9 +141,8 @@ export function createHandlers(options: Options) {
 
   const local = route(async (req, res) => {
     const host = req.headers.host;
-    if (!host || !hosts.has(host) || req.headers.forwarded || req.headers["x-forwarded-host"]) {
-      throw new HttpError(403, "Open the app on localhost.");
-    }
+    const access = await browserAccess(req, res, hosts);
+    if (access.handled) return;
     const path = new URL(req.url ?? "/", `http://${host}`).pathname;
     if (req.method === "GET" && (path === "/" || path === "/browser.js")) {
       res.writeHead(200, {
@@ -159,7 +162,7 @@ export function createHandlers(options: Options) {
     if (req.method !== "POST" || (path !== "/api/start" && path !== "/api/stop")) {
       throw new HttpError(404, "Route not found.");
     }
-    if (req.headers.origin !== `http://${host}` || req.headers["sec-fetch-site"] === "cross-site") {
+    if (req.headers.origin !== access.origin || req.headers["sec-fetch-site"] === "cross-site") {
       throw new HttpError(403, "Session controls require the local browser origin.");
     }
     const { id } = await body(req);
@@ -298,6 +301,7 @@ async function main() {
 
   const handlers = createHandlers({
     ...source,
+    browserAccess: readBrowserAccessConfig(env),
     timeZone,
     gateway: config && createAgoraGateway(config, fetch, voiceMode),
     voiceMode,

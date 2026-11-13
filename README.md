@@ -21,7 +21,7 @@ flowchart TB
 
 One conversational interface uses one configured health-data provider at a time; the synthetic and Garmin adapters share the same tools and browser.
 
-One Node process binds two listeners on `127.0.0.1`. Port **3000** serves the browser and local Start/Stop controls; port **3001** serves tool callbacks. Tunnel only **3001**. The callback listener returns `404` for the browser and session-control routes, and `401` for tool requests without a valid session bearer.
+One Node process binds two listeners on `127.0.0.1`. Port **3000** serves the browser and local Start/Stop controls; port **3001** serves tool callbacks. By default, tunnel only **3001**. The opt-in temporary mobile mode below separately protects browser access on **3000**. The callback listener returns `404` for the browser and session-control routes, and `401` for tool requests without a valid session bearer.
 
 Implementation map: [browser](src/browser/main.ts), [local server and callbacks](src/server.ts), [Agora gateway](src/agora.ts), [tool schemas and normalization](src/tools.ts), [provider contract](src/providers/types.ts).
 
@@ -38,6 +38,15 @@ npm start
 ```
 
 The repository is currently private: cloning requires authorized GitHub access. A public material link must be arranged separately before submission; these instructions do not imply public availability.
+
+Before committing or pushing from **each clone**, install Gitleaks **8.30.1 or newer** and the repository's Git security hooks. Git does not install hooks automatically when cloning. On macOS, use `brew install gitleaks` if needed, then:
+
+```sh
+sh scripts/install_secret_hooks.sh
+git config --local --get core.hooksPath  # expected: .githooks
+```
+
+See [Git secret protection](docs/git-secret-protection.md) for prerequisites and verification. The hooks scan staged contents and outgoing history, including removed secrets. Mobile passcode assignments and Quick Tunnel URLs are blocked outside exact, scoped documentation placeholders. Keep real values only in ignored local configuration; do not force-add credential files.
 
 Open [http://localhost:3000](http://localhost:3000). Keep `HEALTH_DATA_PROVIDER=synthetic`. With all six voice settings blank, the page displays the synthetic indicator and setup state, with Start disabled. This is a credential-free setup preview, not an offline spoken conversation. `npm start` builds the application before starting the server.
 
@@ -67,6 +76,41 @@ The gateway authenticates control requests using `Authorization: agora token=...
 4. Select **Start**, allow microphone access and ask a question. A live session can incur Agora or Murf charges even with fictional data. If playback is blocked, select **Enable audio**.
 
 See [Agora's join reference](https://docs.agora.io/en/api-reference/api-ref/conversational-ai/join) for the service API. Runtime configuration is in [src/agora.ts](src/agora.ts); this documentation update does not change it.
+
+## Temporary HTTPS mobile testing (opt-in)
+
+The default remains localhost-only. Mobile testing adds a separate exact browser origin and a dedicated high-entropy passcode; it does not reuse Agora credentials, the Garmin key, or callback bearers. The browser listener still binds to loopback. An origin allowlist alone is not authentication.
+
+1. Start a **second** Quick Tunnel for the browser listener:
+
+   ```sh
+   cloudflared tunnel --url http://127.0.0.1:3000
+   ```
+
+   Keep the existing tool-callback tunnel pointing to **3001**. `TOOL_CALLBACK_ORIGIN` continues to describe only that callback tunnel. Use Cloudflare's normal host forwarding: do not override `Host` to localhost. The browser request must carry the configured public host. An optional `X-Forwarded-Host` must exactly match it; an optional `X-Forwarded-Proto` must be exactly `https`. RFC `Forwarded`, conflicting values, and forwarded-host/protocol headers on localhost requests are rejected.
+
+2. Generate a dedicated passcode locally:
+
+   ```sh
+   node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("base64url") + "\n")'
+   ```
+
+   This command prints a secret to your own terminal. Do not share terminal output or paste it into chat, source code, URLs, or tunnel commands. Store it only in your ignored `.env`, preferably with owner-only permissions (`chmod 600 .env`). Add:
+
+   ```dotenv
+   MOBILE_BROWSER_ORIGIN=https://your-browser-tunnel.trycloudflare.com
+   MOBILE_BROWSER_PASSCODE=<paste the generated passcode locally>
+   ```
+
+   Replace the origin with the exact HTTPS origin printed by the browser tunnel, **without a trailing slash**, path, query, fragment, credentials, or wildcard. Both settings are required together. Existing environment variables retain their meanings. These new settings remain server-only and are not returned by `/api/info`.
+
+3. Restart with `npm start`. On mobile, open the browser tunnel's HTTPS URL and enter the passcode in the password form. Submit only through that HTTPS form. Authentication uses a random, host-only `Secure; HttpOnly; SameSite=Strict` cookie; JavaScript cannot read it. Start/Stop still requires the exact request origin and rejects cross-site requests. No CORS allowlist or proxy-wide trust is enabled. Microphone permission is requested by **Start Conversation** as before.
+
+Access lasts at most one hour per login, with at most eight issued cookies retained in memory. Five failed passcode attempts trigger a one-minute shared cooldown. Restarting Node invalidates every issued cookie. There is no persistent account database or browser storage of the passcode. Login/logout does not start, stop, or extend a voice session; the existing voice-session cleanup and expiry still apply. To sign out on a device, clear this site's cookies. An authenticated same-origin `POST /mobile/logout` also revokes that cookie.
+
+To disable testing, **Stop Conversation**, stop the browser tunnel, remove both `MOBILE_BROWSER_*` settings from `.env`, and restart Node. Close the mobile tab and clear its site data. Keep or stop the separate callback tunnel according to whether you are continuing local voice testing. A new Quick Tunnel URL requires an explicit origin update and restart. Rotate the passcode for each testing window.
+
+This is temporary single-session testing, not a deployment mode. The existing single-session constraint remains shared between desktop and mobile. Voice still needs the existing Agora configuration and reachable authenticated callback tunnel. Actual mobile microphone capture, playback restrictions, and Cloudflare forwarding must be verified on your device.
 
 ## Tool calling and fixture demonstration
 
@@ -116,7 +160,34 @@ npm test
 |---|---|
 | [Recipe tests](tests/recipe.test.mjs) | Fixture answers; dates, partial data and zero; invalid startup configuration; Agora payload structure; callback isolation/authentication/revocation; local expiry and lost-start recovery; stop confirmation; sanitized diagnostics; basic and single-tool modes |
 | [Garmin tests](tests/garmin.test.mjs) | Credential-file permissions; token sharing, expiry and renewal; normalized measurements; missing data; local dates; pagination; malformed/oversized responses; request deadlines; shared tool contracts |
-| [Secret-guard tests](scripts/test_secret_guard.py) | Temporary Git repositories exercise staged/history scanning, removed secrets, tags, multiple ref updates and scanner failure; separate from `npm test` and requires Gitleaks |
+| [Browser tests](tests/browser.test.mjs) | UI/provider states; Start/Stop, cancellation, playback recovery and expiry; stage-specific diagnostics; network/HTTP/empty/invalid JSON failures; WebKit-style exceptions; cleanup retry preserves startup failures |
+| [Mobile access tests](tests/browser-access.test.mjs) | Local defaults; exact HTTPS origins/hosts; passcode authentication; protected cookies, expiry, logout and rate limiting; cross-origin/proxy rejection; callback isolation |
+| [Native login fixture](tests/native-login.fixture.mjs) | Separate manual browser regression: native form Origin, successful dummy authentication and authenticated redirect |
+| [Secret-guard tests](scripts/test_secret_guard.py) | Separate hook tests in disposable repositories: staged/outgoing/history scans, removed secrets, tags, literal mobile passcodes and tunnel URLs, narrow placeholders, and scanner failure; requires Gitleaks |
+
+Current offline validation on **13 November 2026**: **57/57 regression tests** and **23/23 secret-guard self-checks** passed, alongside TypeScript checking and the production build. The candidate source snapshot builds without `.env` or pre-existing `dist/` and reproduces the same redesigned UI HTML and generated browser bundle. The lockfile is unchanged; this snapshot check reused installed dependencies rather than performing a new network install. `npm start` rebuilds the committed UI source, so generated `dist/` files are not published.
+
+Startup failures identify microphone access, `/api/start`, RTC client creation, RTC join, or microphone publication. HTTP diagnostics show only the operation, status, normalized content type and redirect flag. Backend messages are allowlisted; response bodies, cookies, credentials, personal measurements and raw SDK objects are not logged. A cleanup failure appends to the original startup failure and retains Stop retry behavior.
+
+To repeat the native-form check after `npm run build`:
+
+```sh
+node tests/native-login.fixture.mjs
+```
+
+Open `http://localhost:3105`, enter the intentionally fictional passcode described by the fixture, and submit **Continue**. Success requires the browser-generated Origin, a protected opaque cookie, and an authenticated redirect. Stop the fixture with Control-C. It binds only to loopback, uses no real credentials or Agora sessions, and is separate from `npm test`. It translates only the exact local HTTP origin to the test gate's HTTPS origin; this verifies native form behavior without claiming a real HTTPS/device test.
+
+Run the additional security checks before publication:
+
+```sh
+python3 scripts/test_secret_guard.py
+python3 scripts/secret_guard.py staged
+python3 scripts/secret_guard.py history
+```
+
+The staged scan covers the index; run it again after explicitly staging the approved files. The working candidate, generated bundle and local history also passed secret scans during this review. No secrets, personal measurements or active tunnel URLs are included in the recipe. Scanning is defense in depth; review recordings and screenshots separately before sharing.
+
+**Owner-confirmed live evidence, reported on 13 November 2026:** successful iPhone HTTPS mobile authentication and a voice conversation using the Garmin provider. This is an owner report, not a live test performed by the reviewing agent. No personal measurements, credentials, active tunnel addresses or session artifacts are recorded here. It does not establish coverage of every health tool. Synthetic remains the default; Garmin (`HEALTH_DATA_PROVIDER=custom`) and mobile HTTPS testing remain optional. No additional live Agora sessions or Garmin API calls were made during this review.
 
 Evidence recorded for recipe preparation on **10 November 2026**:
 

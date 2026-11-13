@@ -20,3 +20,42 @@ condition = "AND"
 paths = ['''(^|/)tests/recipe\.test\.mjs$''']
 regexTarget = "secret"
 regexes = ['''^test-(?:secret|murf)$''']
+
+# Dedicated mobile login secrets, including shell/env, TypeScript and JSON forms.
+[[rules]]
+id = "health-voice-mobile-passcode"
+description = "Literal mobile browser passcode assignment"
+regex = '''(?i)\bMOBILE_BROWSER_PASSCODE["']?\s*[=:]\s*["']?([a-z0-9_+/.=:@-]{8,})'''
+secretGroup = 1
+
+[[rules.allowlists]]
+condition = "AND"
+paths = ['''(^|/)(?:src/browser-access\.ts|dist/browser-access\.js)$''']
+regexTarget = "secret"
+# Variable reference, never a valid generated passcode (minimum 43 characters).
+regexes = ['''^config\.passcode$''']
+
+[[rules.allowlists]]
+condition = "AND"
+paths = ['''(^|/)tests/browser-access\.test\.mjs$''']
+regexTarget = "secret"
+regexes = ['''^passcode$''']
+
+# Treat live Quick Tunnel addresses as local configuration, including paths and
+# query strings. No test-directory or documentation-directory exclusions.
+[[rules]]
+id = "health-voice-quick-tunnel-url"
+description = "Cloudflare Quick Tunnel URL in publishable content"
+regex = '''(?i)\bhttps?://(?:[a-z0-9._~%!$&()*+,;=:+-]+@)?(?:[a-z0-9-]+\.)*trycloudflare\.com\b(?::[0-9]+)?(?:[/?#][^\s"'<>`\\]*)?'''
+
+[[rules.allowlists]]
+condition = "AND"
+paths = ['''(^|/)\.env\.example$''']
+regexTarget = "match"
+regexes = ['''^https://(?:example|your-browser-tunnel)\.trycloudflare\.com$''']
+
+[[rules.allowlists]]
+condition = "AND"
+paths = ['''(^|/)README\.md$''']
+regexTarget = "match"
+regexes = ['''^https://your-browser-tunnel\.trycloudflare\.com$''']
