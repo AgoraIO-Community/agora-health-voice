@@ -37,7 +37,7 @@ cp .env.example .env
 npm start
 ```
 
-The repository is currently private: cloning requires authorized GitHub access. A public material link must be arranged separately before submission; these instructions do not imply public availability.
+The repository is public; cloning does not require authorized GitHub access.
 
 Before committing or pushing from **each clone**, install Gitleaks **8.30.1 or newer** and the repository's Git security hooks. Git does not install hooks automatically when cloning. On macOS, use `brew install gitleaks` if needed, then:
 
@@ -206,10 +206,10 @@ Synthetic operation needs no health credentials. Choosing Garmin exposes normali
 
 Garmin's cold authentication can exceed the tool's five-second timeout even when a direct provider operation succeeds. See [provider limits](docs/providers.md) before interpreting live availability.
 
-The project is licensed under the [MIT License](LICENSE), with the approved notice `Copyright (c) 2026 Agora, Inc.`. See the [license status](docs/license-proposal.md) for scope. The repository is owned by `AgoraIO-Community` and remains private; license approval does not authorize a visibility change or submission. Before submission:
+The project is licensed under the [MIT License](LICENSE), with the approved notice `Copyright (c) 2026 Agora, Inc.`. See the [license status](docs/license-proposal.md) for scope. The public repository is owned by `AgoraIO-Community`; public availability does not itself authorize an Agora Recipes submission. Before submission:
 
-- Confirm the public author/contributor credit separately from copyright ownership.
+- Preserve the public author credit **Ranga Jagannath**, as recorded in [submission Issue #110](https://github.com/AgoraIO-Community/agora-recipes/issues/110), separately from copyright ownership.
 - The [refreshed security audit](docs/git-secret-protection.md) passed the current working-file and complete local-history scans. Recheck any later changes before publication; hooks are local and must be installed in each clone.
-- Arrange at least one reviewed public material URL under separate publication authorization. The [Agora submission form](https://github.com/AgoraIO-Community/agora-recipes/blob/main/.github/ISSUE_TEMPLATE/submission.yml) needs a name, English introduction, author credit and public link; a video or hosted demo is optional. Maintainers prepare the catalog PR after issue review.
+- Follow the current [Agora Recipes contribution guide](https://github.com/AgoraIO-Community/agora-recipes/blob/staging/CONTRIBUTING.md): prepare catalog metadata in a separate fork checkout, branch from upstream `staging`, and target `staging` with the authorized PR. Include English metadata, unchanged author credit and at least one verified public material. Issue #110 is the existing submission context; the current process uses a direct PR rather than an issue-to-maintainer handoff. Once the recipe metadata and validation are complete, the contribution can be submitted as a pull request against `staging`.
 
 Keep validation claims limited to the evidence above. Publishing a source-only recipe does not require additional Garmin features or a hosted service.
